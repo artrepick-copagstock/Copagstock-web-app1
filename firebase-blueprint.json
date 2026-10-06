@@ -1,0 +1,136 @@
+{
+  "entities": {
+    "Material": {
+      "title": "Material",
+      "description": "Inventory material item registered in the faculty system",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64, "description": "Material code/ID e.g. 1ก01" },
+        "no": { "type": "number", "description": "Display order number" },
+        "name": { "type": "string", "maxLength": 200, "description": "Material name in Thai" },
+        "category": { "type": "string", "maxLength": 100, "description": "Material category" },
+        "unitPrice": { "type": "number", "description": "Unit purchase price" },
+        "purchaseQty": { "type": "number", "description": "Initial or target purchase quantity" },
+        "unit": { "type": "string", "maxLength": 50, "description": "Unit of measurement" },
+        "minQty": { "type": "number", "description": "Minimum safety stock limit" },
+        "maxQty": { "type": "number", "description": "Maximum capacity stock limit" },
+        "currentStock": { "type": "number", "description": "Current remaining stock" },
+        "refillStatus": { "type": "string", "enum": ["OK", "ใกล้หมด", "วัสดุหมด"] },
+        "usageStatus": { "type": "string", "enum": ["ประจำ", "ครั้งคราว"] },
+        "totalPurchaseCost": { "type": "number", "description": "Total purchase cost calculated" },
+        "totalWithdrawn": { "type": "number", "description": "Total quantity disbursed" },
+        "monthlyAverage": { "type": "number", "description": "Average monthly consumption" },
+        "imageUrl": { "type": "string", "maxLength": 500000, "description": "Material image URL or compressed data URL" }
+      },
+      "required": ["id", "name", "category", "unitPrice", "unit", "currentStock"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Requisition order submitted by faculty staff/students",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64, "description": "Requisition order unique ID" },
+        "docNo": { "type": "string", "maxLength": 64, "description": "Official requisition document number" },
+        "date": { "type": "string", "maxLength": 30, "description": "Submission date string" },
+        "requesterName": { "type": "string", "maxLength": 150, "description": "Full name of the requester" },
+        "requesterEmail": { "type": "string", "maxLength": 150, "description": "Requester email address" },
+        "requesterPosition": { "type": "string", "maxLength": 100, "description": "Job position or student level" },
+        "department": { "type": "string", "maxLength": 150, "description": "Department/faculty division" },
+        "purpose": { "type": "string", "maxLength": 500, "description": "Requisition purpose or project name" },
+        "totalItems": { "type": "number", "description": "Total quantity of items requested" },
+        "totalAmount": { "type": "number", "description": "Total cost estimated in Baht" },
+        "status": { "type": "string", "enum": ["รออนุมัติ", "อนุมัติแล้ว", "เบิกจ่ายแล้ว", "ยกเลิก"] },
+        "approverName": { "type": "string", "maxLength": 150, "description": "Approving officer name" },
+        "disbursedDate": { "type": "string", "maxLength": 30, "description": "Disbursement completion date" },
+        "driveFileId": { "type": "string", "maxLength": 150, "description": "Saved PDF Google Drive file ID" },
+        "driveViewLink": { "type": "string", "maxLength": 500, "description": "Google Drive view link" }
+      },
+      "required": ["id", "docNo", "date", "requesterName", "department", "status"]
+    },
+    "StockIn": {
+      "title": "StockIn",
+      "description": "Log record for receiving materials into inventory",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64, "description": "Stock in transaction ID" },
+        "date": { "type": "string", "maxLength": 30, "description": "Date of transaction" },
+        "docNo": { "type": "string", "maxLength": 64, "description": "Invoice/PO/voucher number" },
+        "materialId": { "type": "string", "maxLength": 64, "description": "Material ID referenced" },
+        "materialName": { "type": "string", "maxLength": 200, "description": "Name of the material" },
+        "category": { "type": "string", "maxLength": 100, "description": "Category" },
+        "quantity": { "type": "number", "description": "Quantity received" },
+        "unit": { "type": "string", "maxLength": 50, "description": "Unit of measurement" },
+        "unitPrice": { "type": "number", "description": "Unit purchase price" },
+        "totalPrice": { "type": "number", "description": "Total amount in Baht" },
+        "supplier": { "type": "string", "maxLength": 200, "description": "Vendor or origin" },
+        "receiverName": { "type": "string", "maxLength": 150, "description": "Officer receiving items" },
+        "note": { "type": "string", "maxLength": 500, "description": "Notes" },
+        "obligationNo": { "type": "string", "maxLength": 100, "description": "Budget commitment/obligation number (เลขใบผูกพัน)" },
+        "budgetType": { "type": "string", "enum": ["เงินราย", "เงินแผ่นดิน"], "description": "Budget category type (เงินราย หรือ เงินแผ่นดิน)" }
+      },
+      "required": ["id", "date", "docNo", "materialId", "quantity", "receiverName"]
+    },
+    "StockOut": {
+      "title": "StockOut",
+      "description": "Log record for disbursed materials from inventory",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64, "description": "Stock out transaction ID" },
+        "date": { "type": "string", "maxLength": 30, "description": "Disbursement date" },
+        "requisitionDocNo": { "type": "string", "maxLength": 64, "description": "Requisition document number" },
+        "materialId": { "type": "string", "maxLength": 64, "description": "Material ID referenced" },
+        "materialName": { "type": "string", "maxLength": 200, "description": "Name of the material" },
+        "category": { "type": "string", "maxLength": 100, "description": "Category" },
+        "quantity": { "type": "number", "description": "Quantity disbursed" },
+        "unit": { "type": "string", "maxLength": 50, "description": "Unit of measurement" },
+        "unitPrice": { "type": "number", "description": "Unit cost" },
+        "totalPrice": { "type": "number", "description": "Total cost" },
+        "requesterName": { "type": "string", "maxLength": 150, "description": "Staff who received goods" },
+        "department": { "type": "string", "maxLength": 150, "description": "Department/Division" },
+        "disburserName": { "type": "string", "maxLength": 150, "description": "Officer who disbursed goods" },
+        "note": { "type": "string", "maxLength": 500, "description": "Notes" }
+      },
+      "required": ["id", "date", "requisitionDocNo", "materialId", "quantity", "requesterName"]
+    },
+    "AppUser": {
+      "title": "AppUser",
+      "type": "object",
+      "description": "User profile and permissions record",
+      "properties": {
+        "email": { "type": "string", "description": "User email address" },
+        "name": { "type": "string", "description": "Display name" },
+        "role": { "type": "string", "enum": ["admin", "user"], "description": "Role" },
+        "department": { "type": "string", "description": "Department" },
+        "position": { "type": "string", "description": "Position" },
+        "photoUrl": { "type": "string", "description": "Profile picture URL" },
+        "lastLoginAt": { "type": "string", "description": "Last login timestamp" },
+        "createdAt": { "type": "string", "description": "Created timestamp" },
+        "loginCount": { "type": "number", "description": "Times logged in" },
+        "status": { "type": "string", "description": "Status" }
+      },
+      "required": ["email", "name", "role"]
+    }
+  },
+  "firestore": {
+    "/materials/{materialId}": {
+      "schema": "Material",
+      "description": "Central catalog of inventory materials"
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "All submitted material requisition orders"
+    },
+    "/stockIn/{stockInId}": {
+      "schema": "StockIn",
+      "description": "Stock intake transactions and ledger entries"
+    },
+    "/stockOut/{stockOutId}": {
+      "schema": "StockOut",
+      "description": "Stock out and disbursement transactions"
+    },
+    "/users/{userId}": {
+      "schema": "AppUser",
+      "description": "User accounts and access management"
+    }
+  }
+}

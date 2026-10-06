@@ -1,0 +1,165 @@
+@import "tailwindcss";
+
+/* ==========================================================================
+   CSS @media print สำหรับตารางสต็อกการ์ด (Stock Card) มาตรฐาน A4 แนวนอน
+   ========================================================================== */
+@media print {
+  /* 1. กำหนดขนาดกระดาษและระยะขอบเป็น A4 Landscape (แนวนอน) */
+  @page {
+    size: A4 landscape;
+    margin: 10mm 12mm 10mm 12mm;
+  }
+
+  /* 2. ล้างพื้นหลัง สีตัวอักษร และตั้งฟอนต์ให้เป็นระเบียบ */
+  *, *::before, *::after {
+    color: #000000 !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  html, body {
+    width: 100% !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    font-family: 'Sarabun', sans-serif !important;
+    font-size: 12pt;
+    line-height: 1.25;
+  }
+
+  /* 3. ซ่อน UI อื่นๆ ทั้งหมดที่ไม่เกี่ยวกับเอกสารพิมพ์ เช่น เมนู, แถบควบคุม, ปุ่มกด */
+  header, nav, aside, footer, button, input, select, .no-print {
+    display: none !important;
+  }
+
+  /* ปรับ Modal container ให้ยืดเต็มหน้าพิมพ์โดยไม่มี overlay ดำหรือ scrollbar */
+  .stockcard-modal-backdrop {
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
+  .stockcard-print-root {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    display: block !important;
+  }
+
+  .stockcard-a4-page {
+    width: 275mm !important;
+    max-width: 275mm !important;
+    min-height: 185mm !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    box-sizing: border-box !important;
+    margin: 0 auto !important;
+    padding: 5mm 6mm !important;
+  }
+
+  .stockcard-a4-page:last-child {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  /* ปรับแต่งสำหรับการพิมพ์แบบฟอร์มใบเบิกวัสดุ A4 แนวตั้ง (Requisition Form) */
+  .requisition-modal-backdrop {
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
+  .requisition-print-root {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    display: block !important;
+  }
+
+  .requisition-a4-page {
+    width: 190mm !important;
+    max-width: 190mm !important;
+    min-height: 265mm !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    box-sizing: border-box !important;
+    margin: 0 auto !important;
+    padding: 10mm 12mm !important;
+    background: #ffffff !important;
+  }
+
+  .requisition-a4-page:last-child {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  /* 4. ป้องกันแถวของตาราง (<tr>) ขาดครึ่งตอนขึ้นหน้าใหม่ */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: auto;
+  }
+
+  thead {
+    /* สั่งให้หัวตารางแสดงซ้ำอัตโนมัติที่ส่วนบนของทุกหน้าที่ขึ้นใหม่ */
+    display: table-header-group !important;
+  }
+
+  tbody {
+    display: table-row-group !important;
+  }
+
+  tfoot {
+    display: table-footer-group !important;
+  }
+
+  tr {
+    /* สำคัญ: ป้องกันแถวตารางขาดครึ่ง (break-inside: avoid) */
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  th, td {
+    border: 1px solid #000000 !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* 5. คลาสสำหรับสั่งให้ขึ้นหน้าใหม่แบบเจาะจง (Force Page Break) */
+  .page-break, .page-break-before {
+    page-break-before: always !important;
+    break-before: page !important;
+  }
+
+  .page-break-after {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+
+  .avoid-break {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+}
