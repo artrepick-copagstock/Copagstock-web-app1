@@ -467,26 +467,18 @@ export const AccountManagementView: FC<AccountManagementViewProps> = ({ currentU
                         <span className="truncate">{user.position || '-'}</span>
                       </td>
 
-                      {/* Role selection toggle */}
+                      {/* Role display */}
                       <td className="py-3 px-4 text-center">
                         {isSuperAdmin ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500 text-slate-950 shadow-xs">
                             <ShieldCheck className="w-3.5 h-3.5" />
-                            <span>แอดมินสูงสุด</span>
+                            <span>แอดมิน (พัสดุ)</span>
                           </span>
                         ) : (
-                          <select
-                            value={user.role}
-                            onChange={e => handleRoleChange(user.email, e.target.value as UserRole)}
-                            className={`px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer border transition focus:ring-2 focus:ring-amber-500 focus:outline-none ${
-                              isAdmin
-                                ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-300'
-                                : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
-                            }`}
-                          >
-                            <option value="user">👤 ผู้ใช้ทั่วไป</option>
-                            <option value="admin">🛡️ แอดมิน</option>
-                          </select>
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                            <User className="w-3.5 h-3.5 text-slate-400" />
+                            <span>ผู้ขอเบิกพัสดุ</span>
+                          </span>
                         )}
                       </td>
 

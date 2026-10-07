@@ -27,7 +27,6 @@ interface HeaderProps {
   isRefreshing?: boolean;
   currentUser: AppUser | null;
   onLogout?: () => void;
-  onToggleRole?: () => void;
 }
 
 export const Header: FC<HeaderProps> = ({
@@ -39,13 +38,14 @@ export const Header: FC<HeaderProps> = ({
   onRefreshData,
   isRefreshing = false,
   currentUser,
-  onLogout,
-  onToggleRole
+  onLogout
 }) => {
-  const isAdmin = currentUser?.role === 'admin';
+  const isAdmin = currentUser?.role === 'admin' && currentUser.email.toLowerCase() === 'kanjanapat.m@msu.ac.th';
 
-  // All 7 Core System Navigation Tabs - fully clickable and functional
-  const navItems: { id: ActiveTab; label: string; icon: typeof LayoutDashboard; badge?: number; badgeColor?: string }[] = [
+  // Navigation tabs strictly according to role:
+  // Admin (kanjanapat.m@msu.ac.th only): All 7 modules
+  // Regular Users: ONLY 'requisition' (คีย์ใบเบิก) and 'orders' (ประวัติใบเบิก)
+  const navItems: { id: ActiveTab; label: string; icon: typeof LayoutDashboard; badge?: number; badgeColor?: string }[] = isAdmin ? [
     { id: 'dashboard', label: 'ภาพรวมคลัง', icon: LayoutDashboard },
     { id: 'orders', label: 'ใบเบิกจ่ายพัสดุ', icon: ClipboardList, badge: pendingOrdersCount, badgeColor: 'bg-rose-500' },
     { id: 'inventory', label: 'ทะเบียนพัสดุ (เพิ่ม/ลบ)', icon: Boxes },
@@ -53,6 +53,9 @@ export const Header: FC<HeaderProps> = ({
     { id: 'ledger', label: 'สมุดคุมบัญชีพัสดุ', icon: BookOpenText },
     { id: 'requisition', label: 'คีย์ใบเบิก', icon: ShoppingCart, badge: cartCount, badgeColor: 'bg-amber-500' },
     { id: 'users', label: 'จัดการผู้ใช้งาน', icon: Users }
+  ] : [
+    { id: 'requisition', label: 'คีย์ใบเบิก', icon: ShoppingCart, badge: cartCount, badgeColor: 'bg-amber-500' },
+    { id: 'orders', label: 'ประวัติใบเบิกของฉัน', icon: ClipboardList, badge: pendingOrdersCount, badgeColor: 'bg-amber-500' }
   ];
 
   return (
@@ -110,27 +113,11 @@ export const Header: FC<HeaderProps> = ({
                     <span className="font-semibold text-slate-100 max-w-[140px] truncate">
                       {currentUser.name}
                     </span>
-                    {onToggleRole ? (
-                      <button
-                        type="button"
-                        onClick={onToggleRole}
-                        title="คลิกเพื่อสลับสิทธิ์การใช้งาน (แอดมินพัสดุ <-> ผู้ขอเบิก)"
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition flex items-center gap-1 cursor-pointer hover:scale-105 active:scale-95 ${
-                          isAdmin 
-                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30' 
-                            : 'bg-blue-500/20 text-blue-300 border border-blue-500/40 hover:bg-blue-500/30'
-                        }`}
-                      >
-                        <span>{isAdmin ? 'แอดมิน (พัสดุ)' : 'ผู้ขอเบิก'}</span>
-                        <RefreshCw className="w-2.5 h-2.5 opacity-80" />
-                      </button>
-                    ) : (
-                      <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
-                        isAdmin ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
-                      }`}>
-                        {isAdmin ? 'แอดมิน (พัสดุ)' : 'ผู้ขอเบิก'}
-                      </span>
-                    )}
+                    <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
+                      isAdmin ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
+                    }`}>
+                      {isAdmin ? 'แอดมิน (พัสดุ)' : 'ผู้ขอเบิก'}
+                    </span>
                   </div>
                   <div className="text-[10px] text-slate-400">
                     {currentUser.email}
@@ -161,15 +148,17 @@ export const Header: FC<HeaderProps> = ({
               <span className="hidden sm:inline">รีเฟรช</span>
             </button>
 
-            <button
-              id="data-management-btn"
-              onClick={onOpenDataModal}
-              title="จัดการและสำรองข้อมูล"
-              className="px-3 py-1.5 text-xs font-medium text-amber-300 bg-amber-950/50 hover:bg-amber-900/50 border border-amber-800/60 rounded-lg transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <Database className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">จัดการข้อมูล / สำรอง</span>
-            </button>
+            {isAdmin && (
+              <button
+                id="data-management-btn"
+                onClick={onOpenDataModal}
+                title="จัดการและสำรองข้อมูล"
+                className="px-3 py-1.5 text-xs font-medium text-amber-300 bg-amber-950/50 hover:bg-amber-900/50 border border-amber-800/60 rounded-lg transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Database className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">จัดการข้อมูล / สำรอง</span>
+              </button>
+            )}
           </div>
 
         </div>

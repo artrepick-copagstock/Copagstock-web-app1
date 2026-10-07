@@ -37,10 +37,10 @@ export const PRESET_USERS: AppUser[] = [
   },
   {
     email: 'artrepick@gmail.com',
-    name: 'ผู้ดูแลระบบ (Artrepick)',
-    role: 'admin',
+    name: 'ผู้ใช้ระบบ (Artrepick)',
+    role: 'user',
     department: 'วิทยาลัยการเมืองการปกครอง',
-    position: 'ผู้ดูแลระบบสารสนเทศพัสดุ (Admin)',
+    position: 'อาจารย์/บุคลากร',
     status: 'active',
     loginCount: 1,
     lastLoginAt: new Date().toISOString()
@@ -139,8 +139,10 @@ export class StorageService {
       }
       const u = JSON.parse(stored);
       if (u && u.email && isAllowedMsuEmail(u.email)) {
-        if (u.email.toLowerCase() === 'kanjanapat.m@msu.ac.th' || u.email.toLowerCase() === 'artrepick@gmail.com') {
+        if (u.email.toLowerCase() === 'kanjanapat.m@msu.ac.th') {
           u.role = 'admin';
+        } else {
+          u.role = 'user';
         }
         return u;
       }
@@ -153,8 +155,10 @@ export class StorageService {
 
   static setCurrentUser(user: AppUser | null): void {
     if (user) {
-      if (user.email && (user.email.toLowerCase() === 'kanjanapat.m@msu.ac.th' || user.email.toLowerCase() === 'artrepick@gmail.com')) {
+      if (user.email && user.email.toLowerCase() === 'kanjanapat.m@msu.ac.th') {
         user.role = 'admin';
+      } else {
+        user.role = 'user';
       }
       sessionStorage.setItem(STORAGE_KEYS.AUTH_USER, JSON.stringify(user));
     } else {
@@ -212,7 +216,7 @@ export class StorageService {
       const clean = u.email.trim().toLowerCase();
       if (deletedEmails.has(clean)) return;
 
-      const isAdminEmail = clean === 'kanjanapat.m@msu.ac.th' || clean === 'artrepick@gmail.com';
+      const isAdminEmail = clean === 'kanjanapat.m@msu.ac.th';
       if (userMap.has(clean)) {
         const existing = userMap.get(clean)!;
         userMap.set(clean, {
@@ -222,7 +226,7 @@ export class StorageService {
           uid: u.uid || existing.uid,
           photoUrl: u.photoUrl || existing.photoUrl,
           name: u.name || existing.name,
-          role: isAdminEmail ? 'admin' : (u.role || existing.role || 'user'),
+          role: isAdminEmail ? 'admin' : 'user',
           lastLoginAt: u.lastLoginAt || existing.lastLoginAt,
           loginCount: Math.max(u.loginCount || 0, existing.loginCount || 0)
         });
@@ -230,7 +234,7 @@ export class StorageService {
         userMap.set(clean, {
           ...u,
           email: clean,
-          role: isAdminEmail ? 'admin' : (u.role || 'user')
+          role: isAdminEmail ? 'admin' : 'user'
         });
       }
     };
@@ -326,18 +330,20 @@ export class StorageService {
     return updatedUser;
   }
 
-  static async updateUserRole(email: string, newRole: UserRole): Promise<void> {
+  static async updateUserRole(email: string, _newRole: UserRole): Promise<void> {
     const cleanEmail = email.trim().toLowerCase();
+    // Strictly enforce: ONLY kanjanapat.m@msu.ac.th can be admin. All other accounts are user!
+    const enforcedRole: UserRole = cleanEmail === 'kanjanapat.m@msu.ac.th' ? 'admin' : 'user';
 
     const users = await this.getUsers();
     const target = users.find(u => u.email.toLowerCase() === cleanEmail);
     if (target) {
-      target.role = newRole;
+      target.role = enforcedRole;
       localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
       if (db) {
         try {
           const safeDocId = cleanEmail.replace(/[^a-zA-Z0-9_-]/g, '_');
-          await updateDoc(doc(db, 'users', safeDocId), { role: newRole });
+          await updateDoc(doc(db, 'users', safeDocId), { role: enforcedRole });
         } catch (e) {
           console.warn('Firestore user role update error:', e);
         }

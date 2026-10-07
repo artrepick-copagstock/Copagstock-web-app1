@@ -18,10 +18,17 @@ import { onAuthStateChanged, signOut as fbSignOut } from 'firebase/auth';
 import { syncCustomCategoriesFromFirestore } from './utils/materialIdGenerator';
 
 export default function App() {
-  const [currentUser, setCurrentUser] = useState<AppUser | null>(() => StorageService.getCurrentUser());
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(() => {
+    const u = StorageService.getCurrentUser();
+    if (u) {
+      const isSuper = Boolean(u.email && u.email.toLowerCase() === 'kanjanapat.m@msu.ac.th');
+      u.role = isSuper ? 'admin' : 'user';
+    }
+    return u;
+  });
   const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
     const user = StorageService.getCurrentUser();
-    return user?.role === 'admin' ? 'dashboard' : 'requisition';
+    return user && user.email.toLowerCase() === 'kanjanapat.m@msu.ac.th' ? 'dashboard' : 'requisition';
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -91,17 +98,14 @@ export default function App() {
     await loadData();
   };
 
-  const handleToggleRole = () => {
-    if (!currentUser) return;
-    const newRole: UserRole = currentUser.role === 'admin' ? 'user' : 'admin';
-    const updatedUser: AppUser = {
-      ...currentUser,
-      role: newRole,
-      position: newRole === 'admin' ? 'ผู้ดูแลระบบสารสนเทศพัสดุ (Admin)' : 'อาจารย์/บุคลากร'
-    };
-    StorageService.setCurrentUser(updatedUser);
-    setCurrentUser(updatedUser);
-  };
+  // Strict Role Navigation Guard:
+  // Regular users (non-admin) can ONLY access 'requisition' (คีย์ใบเบิก) and 'orders' (ประวัติใบเบิก)
+  useEffect(() => {
+    const isSuper = currentUser?.email?.toLowerCase() === 'kanjanapat.m@msu.ac.th';
+    if (currentUser && !isSuper && activeTab !== 'requisition' && activeTab !== 'orders') {
+      setActiveTab('requisition');
+    }
+  }, [currentUser, activeTab]);
 
   // Sync with Firebase auth state (only if active session already exists)
   useEffect(() => {
@@ -113,12 +117,12 @@ export default function App() {
           const activeSession = StorageService.getCurrentUser();
           // Only sync if user is already logged in for this session
           if (activeSession && activeSession.email.toLowerCase() === email) {
-            const isSuperAdmin = email === 'kanjanapat.m@msu.ac.th' || email === 'artrepick@gmail.com';
+            const isSuperAdmin = email === 'kanjanapat.m@msu.ac.th';
             const user: AppUser = {
               ...activeSession,
               email: email,
               name: fbUser.displayName || activeSession.name,
-              role: isSuperAdmin ? 'admin' : activeSession.role,
+              role: isSuperAdmin ? 'admin' : 'user',
               photoUrl: fbUser.photoURL || activeSession.photoUrl,
               uid: fbUser.uid,
               status: 'active',
@@ -141,9 +145,15 @@ export default function App() {
   }, []);
 
   const handleLogin = (user: AppUser) => {
-    StorageService.setCurrentUser(user);
-    setCurrentUser(user);
-    if (user.role !== 'admin') {
+    const isSuperAdmin = user.email.toLowerCase() === 'kanjanapat.m@msu.ac.th';
+    const finalUser: AppUser = {
+      ...user,
+      role: isSuperAdmin ? 'admin' : 'user',
+      position: isSuperAdmin ? 'ผู้ดูแลระบบสารสนเทศพัสดุ (Admin)' : 'อาจารย์/บุคลากร'
+    };
+    StorageService.setCurrentUser(finalUser);
+    setCurrentUser(finalUser);
+    if (!isSuperAdmin) {
       setActiveTab('requisition');
     } else {
       setActiveTab('dashboard');
@@ -326,7 +336,6 @@ export default function App() {
         isRefreshing={isRefreshing}
         currentUser={currentUser}
         onLogout={handleLogout}
-        onToggleRole={handleToggleRole}
       />
 
       {/* Main Content View */}

@@ -52,9 +52,9 @@ export const LoginPage: FC<LoginPageProps> = ({ onLogin }) => {
       return false;
     }
 
-    // Role designation: kanjanapat.m@msu.ac.th or artrepick@gmail.com is always Admin
-    const isSuperAdmin = cleanEmail === 'kanjanapat.m@msu.ac.th' || cleanEmail === 'artrepick@gmail.com';
-    const finalRole: UserRole = isSuperAdmin ? 'admin' : (candidate.role || 'user');
+    // Role designation: ONLY kanjanapat.m@msu.ac.th is Admin. All other emails are user!
+    const isSuperAdmin = cleanEmail === 'kanjanapat.m@msu.ac.th';
+    const finalRole: UserRole = isSuperAdmin ? 'admin' : 'user';
 
     // Retrieve existing user info if available
     const users = await StorageService.getUsers();
@@ -62,7 +62,7 @@ export const LoginPage: FC<LoginPageProps> = ({ onLogin }) => {
 
     const finalUser: AppUser = {
       email: cleanEmail,
-      name: candidate.name || existing?.name || (isSuperAdmin ? (cleanEmail === 'artrepick@gmail.com' ? 'ผู้ดูแลระบบ (Artrepick)' : 'กานต์จนาภัทร (ผู้ดูแลระบบหลัก)') : cleanEmail.split('@')[0]),
+      name: candidate.name || existing?.name || (isSuperAdmin ? 'กานต์จนาภัทร (ผู้ดูแลระบบหลัก)' : cleanEmail.split('@')[0]),
       role: finalRole,
       department: candidate.department || existing?.department || 'วิทยาลัยการเมืองการปกครอง',
       position: candidate.position || existing?.position || (finalRole === 'admin' ? 'ผู้ดูแลระบบสารสนเทศพัสดุ (Admin)' : 'อาจารย์/บุคลากร'),
@@ -107,10 +107,10 @@ export const LoginPage: FC<LoginPageProps> = ({ onLogin }) => {
               return;
             }
 
-            const isSuper = userEmail === 'kanjanapat.m@msu.ac.th' || userEmail === 'artrepick@gmail.com';
+            const isSuper = userEmail === 'kanjanapat.m@msu.ac.th';
             await processLogin({
               email: userEmail,
-              name: googleUser.displayName || (isSuper ? (userEmail === 'artrepick@gmail.com' ? 'ผู้ดูแลระบบ (Artrepick)' : 'กานต์จนาภัทร (ผู้ดูแลระบบหลัก)') : userEmail.split('@')[0]),
+              name: googleUser.displayName || (isSuper ? 'กานต์จนาภัทร (ผู้ดูแลระบบหลัก)' : userEmail.split('@')[0]),
               role: isSuper ? 'admin' : 'user',
               photoUrl: googleUser.photoURL || undefined,
               uid: googleUser.uid
