@@ -275,6 +275,10 @@ export const OfficialStockCardModal: FC<OfficialStockCardModalProps> = ({
           border: none !important;
           padding: 0 !important;
         }
+        .stockcard-meta-subtitle, .stockcard-meta-subtitle *,
+        .stockcard-continuation-header, .stockcard-continuation-header * {
+          white-space: nowrap !important;
+        }
       `;
 
       const pdf = new jsPDF({
@@ -516,14 +520,19 @@ export const OfficialStockCardModal: FC<OfficialStockCardModalProps> = ({
                           วิทยาลัยการเมืองการปกครอง มหาวิทยาลัยมหาสารคาม
                         </p>
                         <div 
-                          className="flex items-center justify-center flex-wrap gap-2 text-sm mt-1"
-                          style={{ fontSize: '14px', fontFamily: 'Sarabun' }}
+                          className="stockcard-meta-subtitle flex items-center justify-center gap-2 mt-1 whitespace-nowrap overflow-hidden"
+                          style={{ 
+                            fontSize: '12px', 
+                            fontFamily: 'Sarabun',
+                            whiteSpace: 'nowrap',
+                            lineHeight: '1.3'
+                          }}
                         >
-                          <span className="font-bold">{selectedFiscalYearText}</span>
-                          <span>•</span>
-                          <span>{selectedPeriodDisplay}</span>
-                          <span>•</span>
-                          <span className="text-slate-600">(พิมพ์ ณ วันที่ {printDateFullText})</span>
+                          <span className="font-bold shrink-0" style={{ whiteSpace: 'nowrap' }}>{selectedFiscalYearText}</span>
+                          <span className="shrink-0">•</span>
+                          <span className="shrink-0" style={{ whiteSpace: 'nowrap' }}>{selectedPeriodDisplay}</span>
+                          <span className="shrink-0">•</span>
+                          <span className="text-slate-600 shrink-0" style={{ whiteSpace: 'nowrap' }}>(พิมพ์ ณ วันที่ {printDateFullText})</span>
                         </div>
                       </div>
 
@@ -583,18 +592,24 @@ export const OfficialStockCardModal: FC<OfficialStockCardModalProps> = ({
                     </>
                   ) : (
                     /* Continuation Header */
-                    <div className="pb-2 border-b border-black mb-2 flex items-center justify-between">
-                      <div>
-                        <h2 style={{ fontSize: '18px', fontWeight: 'bold', fontFamily: 'Sarabun' }}>
+                    <div className="stockcard-continuation-header pb-2 border-b border-black mb-2 flex items-center justify-between gap-4">
+                      <div className="min-w-0">
+                        <h2 style={{ fontSize: '17px', fontWeight: 'bold', fontFamily: 'Sarabun', lineHeight: '1.2' }}>
                           บัญชีคุมพัสดุ (Stock Card) — แผ่นต่อ
                         </h2>
-                        <p style={{ fontSize: '13px', fontFamily: 'Sarabun' }}>
-                          วิทยาลัยการเมืองการปกครอง มหาวิทยาลัยมหาสารคาม • รหัสพัสดุ: [{material.id}] {material.name} • <span className="font-bold text-amber-900">คงเหลือปัจจุบัน: {currentStockNumber} {material.unit}</span>
+                        <p 
+                          className="whitespace-nowrap"
+                          style={{ fontSize: '12px', fontFamily: 'Sarabun', whiteSpace: 'nowrap', lineHeight: '1.3' }}
+                        >
+                          วิทยาลัยการเมืองการปกครอง มหาวิทยาลัยมหาสารคาม • รหัสพัสดุ: [{material.id}] {material.name} • <span className="font-bold text-amber-900 shrink-0" style={{ whiteSpace: 'nowrap' }}>คงเหลือปัจจุบัน: {currentStockNumber} {material.unit}</span>
                         </p>
                       </div>
-                      <div className="text-right text-xs" style={{ fontFamily: 'Sarabun' }}>
-                        <p className="font-bold">{selectedFiscalYearText}</p>
-                        <p className="text-slate-600 text-[11px]">{selectedPeriodDisplay}</p>
+                      <div 
+                        className="text-right text-xs shrink-0 whitespace-nowrap" 
+                        style={{ fontFamily: 'Sarabun', whiteSpace: 'nowrap' }}
+                      >
+                        <p className="font-bold" style={{ whiteSpace: 'nowrap', lineHeight: '1.2' }}>{selectedFiscalYearText}</p>
+                        <p className="text-slate-600 text-[11px]" style={{ whiteSpace: 'nowrap', lineHeight: '1.2' }}>{selectedPeriodDisplay}</p>
                       </div>
                     </div>
                   )}
@@ -882,6 +897,10 @@ export const OfficialStockCardModal: FC<OfficialStockCardModalProps> = ({
             background-color: transparent !important;
             border: none !important;
             padding: 0 !important;
+          }
+          .stockcard-meta-subtitle, .stockcard-meta-subtitle *,
+          .stockcard-continuation-header, .stockcard-continuation-header * {
+            white-space: nowrap !important;
           }
         }
       `}} />

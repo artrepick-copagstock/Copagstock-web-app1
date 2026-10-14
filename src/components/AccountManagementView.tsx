@@ -89,7 +89,8 @@ export const AccountManagementView: FC<AccountManagementViewProps> = ({ currentU
       setIsDeleting(true);
       await StorageService.deleteUser(user.email);
       setDeleteTargetUser(null);
-      setActionSuccess(`ลบบัญชี ${user.email} ออกจากระบบและ Firebase เรียบร้อยแล้ว`);
+      setUsers(prev => prev.filter(u => u.email.toLowerCase() !== user.email.toLowerCase()));
+      setActionSuccess(`ลบบัญชี ${user.email} ออกจากระบบเรียบร้อยแล้ว`);
       setTimeout(() => setActionSuccess(''), 4000);
 
       // If the deleted account is currently logged in, reload to return to login screen
@@ -100,6 +101,7 @@ export const AccountManagementView: FC<AccountManagementViewProps> = ({ currentU
       await loadUsers();
     } catch (err) {
       console.error('Failed to delete user:', err);
+      setDeleteTargetUser(null);
       alert('เกิดข้อผิดพลาดในการลบบัญชีผู้ใช้');
     } finally {
       setIsDeleting(false);

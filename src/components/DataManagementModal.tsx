@@ -1,6 +1,7 @@
 import { FC, useState, ChangeEvent } from 'react';
 import { Material, Order, StockIn, StockOut } from '../types';
 import { StorageService } from '../services/storageService';
+import { GoogleSheetsService, SPREADSHEET_TITLE } from '../services/googleSheetsService';
 import { 
   X, 
   Download, 
@@ -16,7 +17,11 @@ import {
   AlertCircle,
   CloudUpload,
   Cloud,
-  Server
+  Server,
+  FileSpreadsheet,
+  ExternalLink,
+  FileDown,
+  FileUp
 } from 'lucide-react';
 
 interface DataManagementModalProps {
@@ -45,6 +50,13 @@ export const DataManagementModal: FC<DataManagementModalProps> = ({
   const [isBackingUpFirebase, setIsBackingUpFirebase] = useState(false);
   const [showConfirmReset, setShowConfirmReset] = useState(false);
 
+  // Google Sheets state
+  const [isBackingUpGoogleSheet, setIsBackingUpGoogleSheet] = useState(false);
+  const [isImportingGoogleSheet, setIsImportingGoogleSheet] = useState(false);
+  const [googleSpreadsheetUrl, setGoogleSpreadsheetUrl] = useState<string>('');
+  const [customSheetInput, setCustomSheetInput] = useState<string>('');
+  const [showConfirmGoogleImport, setShowConfirmGoogleImport] = useState(false);
+
   // Backup & sync all system data to Firebase Firestore (project copag)
   const handleBackupToFirebase = async () => {
     try {
@@ -63,6 +75,79 @@ export const DataManagementModal: FC<DataManagementModalProps> = ({
       setIsError(true);
     } finally {
       setIsBackingUpFirebase(false);
+    }
+  };
+
+  // Backup to Google Sheet (ระบบสารสนเทศเบิกจ่ายพัสดุ วิทยาลัยการเมืองการปกครอง)
+  const handleBackupToGoogleSheet = async () => {
+    try {
+      setIsBackingUpGoogleSheet(true);
+      setStatusMessage('');
+      const res = await GoogleSheetsService.backupToGoogleSheet(
+        materials,
+        orders,
+        stockInLogs,
+        stockOutLogs,
+        true
+      );
+      if (res.success) {
+        setGoogleSpreadsheetUrl(res.spreadsheetUrl);
+        setStatusMessage(`สำรองข้อมูลทั้งหมดขึ้น Google Sheet "${SPREADSHEET_TITLE}" สำเร็จเรียบร้อย (${res.stats.materialsCount} รายการพัสดุ, ${res.stats.ordersCount} ใบเบิก, ${res.stats.stockInCount} รับเข้า, ${res.stats.stockOutCount} จ่ายออก)`);
+        setIsError(false);
+      }
+    } catch (err: any) {
+      console.warn('Google Sheet Backup note:', err);
+      if (err?.code === 'auth/popup-closed-by-user' || err?.message?.includes('popup-closed-by-user') || err?.message?.includes('หน้าต่างยืนยันตัวตน')) {
+        setStatusMessage('หน้าต่างเลือกบัญชี Google ถูกปิดก่อนทำรายการเสร็จสิ้น กรุณากดปุ่มสำรองข้อมูลอีกครั้งและเลือกบัญชี Google เพื่ออนุญาตสิทธิ์');
+      } else {
+        setStatusMessage('เกิดข้อผิดพลาดในการสำรองขึ้น Google Sheet: ' + (err?.message || 'โปรดลองอีกครั้ง'));
+      }
+      setIsError(true);
+    } finally {
+      setIsBackingUpGoogleSheet(false);
+    }
+  };
+
+  // Import from Google Sheet (ระบบสารสนเทศเบิกจ่ายพัสดุ วิทยาลัยการเมืองการปกครอง)
+  const handleExecuteGoogleImport = async () => {
+    try {
+      setIsImportingGoogleSheet(true);
+      setStatusMessage('');
+      const res = await GoogleSheetsService.importFromGoogleSheet(
+        customSheetInput.trim() || undefined,
+        true
+      );
+      if (res.materials.length > 0) {
+        localStorage.setItem('copag_msu_materials_v2', JSON.stringify(res.materials));
+        for (const m of res.materials) {
+          await StorageService.saveMaterial(m);
+        }
+        if (res.orders && res.orders.length > 0) {
+          localStorage.setItem('copag_msu_orders_v2', JSON.stringify(res.orders));
+        }
+        if (res.stockInLogs.length > 0) {
+          localStorage.setItem('copag_msu_stock_in_v2', JSON.stringify(res.stockInLogs));
+        }
+        if (res.stockOutLogs.length > 0) {
+          localStorage.setItem('copag_msu_stock_out_v2', JSON.stringify(res.stockOutLogs));
+        }
+        await onDataReload();
+        setGoogleSpreadsheetUrl(res.spreadsheetUrl);
+        const orderText = res.orders && res.orders.length > 0 ? `, ${res.orders.length} ใบเบิก` : '';
+        setStatusMessage(`นำเข้าข้อมูลจาก Google Sheet "${SPREADSHEET_TITLE}" สำเร็จเรียบร้อย (${res.materials.length} รายการพัสดุ${orderText}) ระบบได้ปรับปรุงสต็อกและซิงค์ข้อมูลให้ทันที`);
+        setIsError(false);
+      }
+    } catch (err: any) {
+      console.warn('Google Sheet Import note:', err);
+      if (err?.code === 'auth/popup-closed-by-user' || err?.message?.includes('popup-closed-by-user') || err?.message?.includes('หน้าต่างยืนยันตัวตน')) {
+        setStatusMessage('หน้าต่างเลือกบัญชี Google ถูกปิดก่อนทำรายการเสร็จสิ้น กรุณากดปุ่มนำเข้าข้อมูลอีกครั้งและเลือกบัญชี Google เพื่ออนุญาตสิทธิ์');
+      } else {
+        setStatusMessage('เกิดข้อผิดพลาดในการนำเข้าจาก Google Sheet: ' + (err?.message || 'โปรดตรวจสอบสิทธิ์หรือชื่อสเปรดชีต'));
+      }
+      setIsError(true);
+    } finally {
+      setIsImportingGoogleSheet(false);
+      setShowConfirmGoogleImport(false);
     }
   };
 
@@ -187,23 +272,35 @@ export const DataManagementModal: FC<DataManagementModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-700 space-y-5">
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-lg w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden my-auto animate-fadeIn">
         
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700">
-          <div className="flex items-center gap-2">
-            <Database className="w-5 h-5 text-amber-500" />
-            <h3 className="font-bold text-base text-slate-800 dark:text-white">
-              จัดการและสำรองข้อมูลระบบพัสดุ (Data Management)
-            </h3>
+        {/* Header - Fixed & Pinned at top */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-700 shrink-0 bg-white dark:bg-slate-800 z-10">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+              <Database className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="font-bold text-sm sm:text-base text-slate-800 dark:text-white leading-tight">
+                จัดการและสำรองข้อมูลระบบพัสดุ (Data Management)
+              </h3>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                ระบบจัดการฐานข้อมูล สำรอง และกู้คืนข้อมูล
+              </p>
+            </div>
           </div>
           <button 
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 cursor-pointer"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition cursor-pointer"
+            title="ปิดหน้าต่าง"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Scrollable Modal Body */}
+        <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1 scrollbar-thin">
 
         {statusMessage && (
           <div className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
@@ -266,6 +363,147 @@ export const DataManagementModal: FC<DataManagementModalProps> = ({
                 </>
               )}
             </button>
+          </div>
+
+          {/* 2. Google Sheets Backup & Import (ระบบสารสนเทศเบิกจ่ายพัสดุ วิทยาลัยการเมืองการปกครอง) */}
+          <div className="p-3.5 rounded-xl border border-emerald-300 dark:border-emerald-800/80 bg-emerald-50/70 dark:bg-emerald-950/30 hover:border-emerald-500 transition space-y-3 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="w-5 h-5 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                    <FileSpreadsheet className="w-3.5 h-3.5" />
+                  </div>
+                  <h4 className="text-xs font-bold text-slate-800 dark:text-white">
+                    Google Sheets: {SPREADSHEET_TITLE}
+                  </h4>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 font-extrabold border border-emerald-300">
+                    Google Drive
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-300">
+                  สำรองและนำเข้าข้อมูลพัสดุ สต็อกคงเหลือ ใบเบิก และประวัติรับเข้า-จ่ายออก ผ่าน Google Sheets (แยก 4 ชีตอัตโนมัติ)
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
+                <button
+                  type="button"
+                  onClick={handleBackupToGoogleSheet}
+                  disabled={isBackingUpGoogleSheet || isImportingGoogleSheet}
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-60"
+                  title="สำรองข้อมูลระบบทั้งหมดลงใน Google Sheet 'ระบบสารสนเทศเบิกจ่ายพัสดุ วิทยาลัยการเมืองการปกครอง'"
+                >
+                  {isBackingUpGoogleSheet ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>กำลังส่งออก...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FileUp className="w-3.5 h-3.5" />
+                      <span>สำรองขึ้น Google Sheet</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmGoogleImport(true)}
+                  disabled={isBackingUpGoogleSheet || isImportingGoogleSheet}
+                  className="px-3.5 py-2 bg-white dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-slate-700 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-60"
+                  title="นำเข้าข้อมูลจาก Google Sheet กลับเข้าสู่ระบบ"
+                >
+                  {isImportingGoogleSheet ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>กำลังนำเข้า...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FileDown className="w-3.5 h-3.5" />
+                      <span>นำเข้าจาก Google Sheet</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Link to opened/backed up Google Sheet */}
+            {googleSpreadsheetUrl && (
+              <div className="pt-2 border-t border-emerald-200/60 dark:border-emerald-900/40 flex items-center justify-between text-xs">
+                <span className="text-emerald-800 dark:text-emerald-300 font-semibold flex items-center gap-1 text-[11px]">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  สเปรดชีตพร้อมใช้งาน:
+                </span>
+                <a
+                  href={googleSpreadsheetUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 font-bold text-emerald-700 dark:text-emerald-300 hover:underline bg-white dark:bg-slate-900 px-2.5 py-1 rounded-lg border border-emerald-300 text-[11px]"
+                >
+                  <span>เปิดดูใน Google Sheets</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+            )}
+
+            {/* In-app Confirmation Dialog for Google Import */}
+            {showConfirmGoogleImport && (
+              <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-amber-300 dark:border-amber-700 shadow-sm space-y-2.5 animate-fadeIn">
+                <div className="flex items-start gap-2 text-amber-800 dark:text-amber-200 text-xs">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
+                  <div className="space-y-1 w-full">
+                    <span className="font-bold block text-xs sm:text-sm text-slate-800 dark:text-white">
+                      ยืนยันการนำเข้าข้อมูลจาก Google Sheet?
+                    </span>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-300">
+                      ระบบจะอ่านข้อมูลจากสเปรดชีต <strong>"{SPREADSHEET_TITLE}"</strong> ใน Google Drive ของคุณ และนำมาปรับปรุงรายการพัสดุ ยอดคงเหลือ และประวัติในระบบ
+                    </p>
+                    <div className="pt-1">
+                      <label className="block text-[10px] text-slate-500 font-semibold mb-0.5">
+                        ระบุ URL หรือ ID ของสเปรดชีต (เว้นว่างไว้เพื่อค้นหาชื่อเริ่มต้นอัตโนมัติ):
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="https://docs.google.com/spreadsheets/d/... (หรือปล่อยว่าง)"
+                        value={customSheetInput}
+                        onChange={e => setCustomSheetInput(e.target.value)}
+                        className="w-full px-2.5 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-1 focus:ring-emerald-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100 dark:border-slate-700">
+                  <button
+                    type="button"
+                    disabled={isImportingGoogleSheet}
+                    onClick={() => setShowConfirmGoogleImport(false)}
+                    className="px-3 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-medium transition cursor-pointer"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isImportingGoogleSheet}
+                    onClick={handleExecuteGoogleImport}
+                    className="px-3.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
+                  >
+                    {isImportingGoogleSheet ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>กำลังนำเข้า...</span>
+                      </>
+                    ) : (
+                      <>
+                        <FileDown className="w-3.5 h-3.5" />
+                        <span>ยืนยันเริ่มนำเข้า</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Image Backup Specific */}
@@ -432,11 +670,16 @@ export const DataManagementModal: FC<DataManagementModalProps> = ({
             )}
           </div>
         </div>
+      </div>
 
-        <div className="pt-2 flex justify-end">
+        {/* Footer - Pinned at bottom */}
+        <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/60 shrink-0 flex items-center justify-between">
+          <span className="text-[11px] text-slate-500 dark:text-slate-400 hidden sm:inline">
+            ข้อมูลจัดเก็บในระบบ Local Storage และเชื่อมโยงกับ Cloud
+          </span>
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-xs rounded-xl hover:bg-slate-200 transition cursor-pointer"
+            className="px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold text-xs rounded-xl transition cursor-pointer ml-auto"
           >
             ปิดหน้าต่าง
           </button>

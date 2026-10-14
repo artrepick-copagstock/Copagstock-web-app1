@@ -37,10 +37,10 @@ export const PRESET_USERS: AppUser[] = [
   },
   {
     email: 'artrepick@gmail.com',
-    name: 'ผู้ใช้ระบบ (Artrepick)',
-    role: 'user',
+    name: 'กานต์จนาภัทร / Artrepick (ผู้ดูแลระบบ)',
+    role: 'admin',
     department: 'วิทยาลัยการเมืองการปกครอง',
-    position: 'อาจารย์/บุคลากร',
+    position: 'ผู้ดูแลระบบสารสนเทศพัสดุ (Admin)',
     status: 'active',
     loginCount: 1,
     lastLoginAt: new Date().toISOString()
@@ -132,39 +132,32 @@ export class StorageService {
   // Authentication & Session
   static getCurrentUser(): AppUser | null {
     try {
-      // Check session storage first (for active session in current tab/window)
       const stored = sessionStorage.getItem(STORAGE_KEYS.AUTH_USER);
-      if (stored === 'logged_out' || !stored) {
-        return null;
-      }
-      const u = JSON.parse(stored);
-      if (u && u.email && isAllowedMsuEmail(u.email)) {
-        if (u.email.toLowerCase() === 'kanjanapat.m@msu.ac.th') {
-          u.role = 'admin';
-        } else {
-          u.role = 'user';
+      if (stored && stored !== 'logged_out') {
+        const u = JSON.parse(stored);
+        if (u && u.email && isAllowedMsuEmail(u.email)) {
+          const emailLower = u.email.toLowerCase();
+          const isSuper = emailLower === 'kanjanapat.m@msu.ac.th' || emailLower === 'artrepick@gmail.com' || u.role === 'admin';
+          u.role = isSuper ? 'admin' : 'user';
+          return u;
         }
-        return u;
       }
     } catch {
       // ignore
     }
-    // Always return null by default so user must log in before entering the web app
+    // Return null so the login page is always shown before entering the system
     return null;
   }
 
   static setCurrentUser(user: AppUser | null): void {
     if (user) {
-      if (user.email && user.email.toLowerCase() === 'kanjanapat.m@msu.ac.th') {
-        user.role = 'admin';
-      } else {
-        user.role = 'user';
-      }
+      const emailLower = user.email ? user.email.toLowerCase() : '';
+      const isSuper = emailLower === 'kanjanapat.m@msu.ac.th' || emailLower === 'artrepick@gmail.com' || user.role === 'admin';
+      user.role = isSuper ? 'admin' : 'user';
       sessionStorage.setItem(STORAGE_KEYS.AUTH_USER, JSON.stringify(user));
+      localStorage.setItem(STORAGE_KEYS.AUTH_USER, JSON.stringify(user));
     } else {
-      sessionStorage.removeItem(STORAGE_KEYS.AUTH_USER);
       sessionStorage.setItem(STORAGE_KEYS.AUTH_USER, 'logged_out');
-      localStorage.removeItem(STORAGE_KEYS.AUTH_USER);
       localStorage.setItem(STORAGE_KEYS.AUTH_USER, 'logged_out');
     }
   }
@@ -239,53 +232,62 @@ export class StorageService {
       }
     };
 
-    try {
-      if (db) {
-        try {
-          const snapshot = await getDocs(collection(db, 'users'));
-          if (!snapshot.empty) {
-            snapshot.forEach(docSnap => {
-              const u = docSnap.data() as AppUser;
-              mergeUser(u);
-            });
-          }
-        } catch (e) {
-          console.warn('Firestore users read error, using cache:', e);
+    // Prioritize local cache first so it's instant
+    const cached = localStorage.getItem(STORAGE_KEYS.USERS);
+    if (cached) {
+      try {
+        const parsed: AppUser[] = JSON.parse(cached);
+        if (Array.isArray(parsed)) {
+          parsed.forEach(u => mergeUser(u));
         }
-      }
-
-      // Check local cache
-      const cached = localStorage.getItem(STORAGE_KEYS.USERS);
-      if (cached) {
-        try {
-          const parsed: AppUser[] = JSON.parse(cached);
-          if (Array.isArray(parsed)) {
-            parsed.forEach(u => mergeUser(u));
-          }
-        } catch {}
-      }
-
-      // Merge preset users
-      PRESET_USERS.forEach(preset => mergeUser(preset));
-
-      const finalUsers = Array.from(userMap.values());
-      localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(finalUsers));
-      return finalUsers;
-    } catch {
-      PRESET_USERS.forEach(preset => mergeUser(preset));
-      return Array.from(userMap.values());
+      } catch {}
     }
+
+    PRESET_USERS.forEach(preset => mergeUser(preset));
+
+    // Optional quick background fetch from Firestore (max 1.2s timeout)
+    if (db) {
+      try {
+        const fetchPromise = getDocs(collection(db, 'users'));
+        const timeoutPromise = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 1200));
+        const snapshot: any = await Promise.race([fetchPromise, timeoutPromise]);
+        if (snapshot && !snapshot.empty) {
+          snapshot.forEach((docSnap: any) => {
+            const u = docSnap.data() as AppUser;
+            mergeUser(u);
+          });
+        }
+      } catch (e) {
+        // Fallback to cache silently
+      }
+    }
+
+    const finalUsers = Array.from(userMap.values());
+    try {
+      localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(finalUsers));
+    } catch {}
+    return finalUsers;
   }
 
   static async saveOrUpdateUser(user: AppUser): Promise<AppUser> {
     const cleanEmail = user.email.trim().toLowerCase();
     this.removeDeletedUserEmail(cleanEmail);
-    const isSuperAdmin = cleanEmail === 'kanjanapat.m@msu.ac.th';
+    const isSuperAdmin = cleanEmail === 'kanjanapat.m@msu.ac.th' || cleanEmail === 'artrepick@gmail.com';
     const finalRole: UserRole = isSuperAdmin ? 'admin' : (user.role || 'user');
 
-    const users = await this.getUsers();
-    const existingIndex = users.findIndex(u => u.email.toLowerCase() === cleanEmail);
+    // Retrieve users from local cache immediately (never block on remote DB)
+    let users: AppUser[] = [];
+    try {
+      const cached = localStorage.getItem(STORAGE_KEYS.USERS);
+      if (cached) {
+        users = JSON.parse(cached);
+      }
+    } catch {}
+    if (!Array.isArray(users) || users.length === 0) {
+      users = [...PRESET_USERS];
+    }
 
+    const existingIndex = users.findIndex(u => u.email.toLowerCase() === cleanEmail);
     let updatedUser: AppUser;
     if (existingIndex >= 0) {
       const existing = users[existingIndex];
@@ -295,7 +297,7 @@ export class StorageService {
         email: cleanEmail,
         role: isSuperAdmin ? 'admin' : (user.role || existing.role || 'user'),
         department: user.department || existing.department || 'วิทยาลัยการเมืองการปกครอง',
-        position: user.position || existing.position || (finalRole === 'admin' ? 'เจ้าหน้าที่พัสดุ' : 'อาจารย์/บุคลากร'),
+        position: user.position || existing.position || (finalRole === 'admin' ? 'ผู้ดูแลระบบสารสนเทศพัสดุ (Admin)' : 'อาจารย์/บุคลากร'),
         lastLoginAt: new Date().toISOString(),
         loginCount: (existing.loginCount || 0) + 1,
         status: existing.status || 'active'
@@ -307,7 +309,7 @@ export class StorageService {
         email: cleanEmail,
         role: finalRole,
         department: user.department || 'วิทยาลัยการเมืองการปกครอง',
-        position: user.position || (finalRole === 'admin' ? 'เจ้าหน้าที่พัสดุ' : 'อาจารย์/บุคลากร'),
+        position: user.position || (finalRole === 'admin' ? 'ผู้ดูแลระบบสารสนเทศพัสดุ (Admin)' : 'อาจารย์/บุคลากร'),
         lastLoginAt: new Date().toISOString(),
         createdAt: new Date().toISOString(),
         loginCount: 1,
@@ -316,15 +318,18 @@ export class StorageService {
       users.push(updatedUser);
     }
 
-    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+    try {
+      localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+    } catch {}
 
+    // Async background sync to Firestore (fire-and-forget, never blocks UI or login)
     if (db) {
       try {
         const safeDocId = cleanEmail.replace(/[^a-zA-Z0-9_-]/g, '_');
-        await setDoc(doc(db, 'users', safeDocId), updatedUser, { merge: true });
-      } catch (e) {
-        console.warn('Firestore user save error:', e);
-      }
+        setDoc(doc(db, 'users', safeDocId), updatedUser, { merge: true }).catch(err => {
+          console.warn('Firestore user save note (background):', err);
+        });
+      } catch {}
     }
 
     return updatedUser;
@@ -374,32 +379,39 @@ export class StorageService {
     const cleanEmail = email.trim().toLowerCase();
     this.addDeletedUserEmail(cleanEmail);
 
-    const users = (await this.getUsers()).filter(u => u.email.toLowerCase() !== cleanEmail);
-    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+    // Update local cache immediately so UI deletion is instant
+    let users: AppUser[] = [];
+    try {
+      const cached = localStorage.getItem(STORAGE_KEYS.USERS);
+      if (cached) {
+        users = JSON.parse(cached);
+      }
+    } catch {}
+    if (!Array.isArray(users) || users.length === 0) {
+      users = [...PRESET_USERS];
+    }
+    const filteredUsers = users.filter(u => u.email.toLowerCase() !== cleanEmail);
+    try {
+      localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(filteredUsers));
+    } catch {}
 
+    // Async background Firestore cleanup (fire-and-forget, NEVER blocks UI or delete button)
     if (db) {
-      try {
-        const safeDocId = cleanEmail.replace(/[^a-zA-Z0-9_-]/g, '_');
-        await deleteDoc(doc(db, 'users', safeDocId));
-
-        // Also query collection to delete any docs matching email
+      (async () => {
         try {
+          const safeDocId = cleanEmail.replace(/[^a-zA-Z0-9_-]/g, '_');
+          deleteDoc(doc(db, 'users', safeDocId)).catch(() => {});
+          deleteDoc(doc(db, 'users', cleanEmail)).catch(() => {});
+
           const usersRef = collection(db, 'users');
           const q = query(usersRef, where('email', '==', cleanEmail));
           const snap = await getDocs(q);
           const delPromises = snap.docs.map(d => deleteDoc(d.ref));
           await Promise.all(delPromises);
-        } catch (qErr) {
-          console.warn('Firestore email query delete error:', qErr);
+        } catch (e) {
+          console.warn('Firestore user delete background note:', e);
         }
-
-        // Direct email docId check
-        try {
-          await deleteDoc(doc(db, 'users', cleanEmail));
-        } catch {}
-      } catch (e) {
-        console.warn('Firestore user delete error:', e);
-      }
+      })();
     }
 
     // If currently logged in user is deleted, clear session
@@ -787,7 +799,9 @@ export class StorageService {
 
     if (db) {
       try {
-        await deleteDoc(doc(db, 'materials', id));
+        const delPromise = deleteDoc(doc(db, 'materials', id));
+        const timeoutPromise = new Promise(resolve => setTimeout(resolve, 2000));
+        await Promise.race([delPromise, timeoutPromise]);
       } catch (e) {
         console.warn('Firestore delete notice (deleted locally):', e);
       }
@@ -1346,7 +1360,9 @@ export class StorageService {
 
     if (db) {
       try {
-        await deleteDoc(doc(db, 'orders', orderId));
+        const delPromise = deleteDoc(doc(db, 'orders', orderId));
+        const timeoutPromise = new Promise(resolve => setTimeout(resolve, 2000));
+        await Promise.race([delPromise, timeoutPromise]);
       } catch (e) {
         console.warn('Firestore delete order notice:', e);
       }
@@ -1769,7 +1785,9 @@ export class StorageService {
 
     if (db) {
       try {
-        await deleteDoc(doc(db, 'stockIn', id));
+        const delPromise = deleteDoc(doc(db, 'stockIn', id));
+        const timeoutPromise = new Promise(resolve => setTimeout(resolve, 2000));
+        await Promise.race([delPromise, timeoutPromise]);
       } catch (e) {
         console.warn('Firestore delete stockIn notice:', e);
       }
@@ -1873,7 +1891,9 @@ export class StorageService {
 
     if (db) {
       try {
-        await deleteDoc(doc(db, 'stockOut', id));
+        const delPromise = deleteDoc(doc(db, 'stockOut', id));
+        const timeoutPromise = new Promise(resolve => setTimeout(resolve, 2000));
+        await Promise.race([delPromise, timeoutPromise]);
       } catch (e) {
         console.warn('Firestore delete stockOut notice:', e);
       }

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Material, Order, StockIn, StockOut, OrderItem, ActiveTab, OrderStatus, AppUser, UserRole } from './types';
-import { StorageService, isAllowedMsuEmail } from './services/storageService';
+import { StorageService, isAllowedMsuEmail, PRESET_USERS } from './services/storageService';
 import { Header } from './components/Header';
 import { LoginPage } from './components/LoginPage';
 import { DashboardView } from './components/DashboardView';
@@ -16,20 +16,12 @@ import { Loader2 } from 'lucide-react';
 import { auth } from './firebase';
 import { onAuthStateChanged, signOut as fbSignOut } from 'firebase/auth';
 import { syncCustomCategoriesFromFirestore } from './utils/materialIdGenerator';
+import { GoogleSheetsService } from './services/googleSheetsService';
 
 export default function App() {
-  const [currentUser, setCurrentUser] = useState<AppUser | null>(() => {
-    const u = StorageService.getCurrentUser();
-    if (u) {
-      const isSuper = Boolean(u.email && u.email.toLowerCase() === 'kanjanapat.m@msu.ac.th');
-      u.role = isSuper ? 'admin' : 'user';
-    }
-    return u;
-  });
-  const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
-    const user = StorageService.getCurrentUser();
-    return user && user.email.toLowerCase() === 'kanjanapat.m@msu.ac.th' ? 'dashboard' : 'requisition';
-  });
+  // Always display the login page first before entering the system
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
+  const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -101,13 +93,14 @@ export default function App() {
   // Strict Role Navigation Guard:
   // Regular users (non-admin) can ONLY access 'requisition' (คีย์ใบเบิก) and 'orders' (ประวัติใบเบิก)
   useEffect(() => {
-    const isSuper = currentUser?.email?.toLowerCase() === 'kanjanapat.m@msu.ac.th';
+    const emailLower = currentUser?.email ? currentUser.email.toLowerCase() : '';
+    const isSuper = emailLower === 'kanjanapat.m@msu.ac.th' || emailLower === 'artrepick@gmail.com' || currentUser?.role === 'admin';
     if (currentUser && !isSuper && activeTab !== 'requisition' && activeTab !== 'orders') {
       setActiveTab('requisition');
     }
   }, [currentUser, activeTab]);
 
-  // Sync with Firebase auth state (only if active session already exists)
+  // Sync with Firebase auth state safely (never kick out active user during Google Sheets OAuth)
   useEffect(() => {
     if (!auth) return;
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
@@ -115,28 +108,20 @@ export default function App() {
         const email = fbUser.email.toLowerCase();
         if (isAllowedMsuEmail(email)) {
           const activeSession = StorageService.getCurrentUser();
-          // Only sync if user is already logged in for this session
-          if (activeSession && activeSession.email.toLowerCase() === email) {
-            const isSuperAdmin = email === 'kanjanapat.m@msu.ac.th';
-            const user: AppUser = {
-              ...activeSession,
-              email: email,
-              name: fbUser.displayName || activeSession.name,
-              role: isSuperAdmin ? 'admin' : 'user',
-              photoUrl: fbUser.photoURL || activeSession.photoUrl,
-              uid: fbUser.uid,
-              status: 'active',
-              lastLoginAt: new Date().toISOString()
-            };
-            await StorageService.saveOrUpdateUser(user);
-            StorageService.setCurrentUser(user);
-            setCurrentUser(user);
-          }
-        } else {
-          // Block unauthorized emails
-          await fbSignOut(auth);
-          await StorageService.signOut();
-          setCurrentUser(null);
+          const isSuperAdmin = email === 'kanjanapat.m@msu.ac.th' || email === 'artrepick@gmail.com' || activeSession?.role === 'admin';
+          const user: AppUser = {
+            ...(activeSession || PRESET_USERS[0]),
+            email: email,
+            name: fbUser.displayName || activeSession?.name || email.split('@')[0],
+            role: isSuperAdmin ? 'admin' : 'user',
+            photoUrl: fbUser.photoURL || activeSession?.photoUrl,
+            uid: fbUser.uid,
+            status: 'active',
+            lastLoginAt: new Date().toISOString()
+          };
+          await StorageService.saveOrUpdateUser(user);
+          StorageService.setCurrentUser(user);
+          setCurrentUser(user);
         }
       }
     });
@@ -145,11 +130,13 @@ export default function App() {
   }, []);
 
   const handleLogin = (user: AppUser) => {
-    const isSuperAdmin = user.email.toLowerCase() === 'kanjanapat.m@msu.ac.th';
+    const isSuperAdmin = user.email.toLowerCase() === 'kanjanapat.m@msu.ac.th' || 
+                         user.email.toLowerCase() === 'artrepick@gmail.com' || 
+                         user.role === 'admin';
     const finalUser: AppUser = {
       ...user,
       role: isSuperAdmin ? 'admin' : 'user',
-      position: isSuperAdmin ? 'ผู้ดูแลระบบสารสนเทศพัสดุ (Admin)' : 'อาจารย์/บุคลากร'
+      position: isSuperAdmin ? 'ผู้ดูแลระบบสารสนเทศพัสดุ (Admin)' : (user.position || 'อาจารย์/บุคลากร')
     };
     StorageService.setCurrentUser(finalUser);
     setCurrentUser(finalUser);
@@ -162,6 +149,7 @@ export default function App() {
 
   const handleLogout = async () => {
     await StorageService.signOut();
+    GoogleSheetsService.clearToken();
     if (auth) {
       try {
         await fbSignOut(auth);
@@ -280,22 +268,34 @@ export default function App() {
   };
 
   // Delete Stock In (ลบรายการรับเข้า)
-  const handleDeleteStockIn = async (id: string) => {
-    const res = await StorageService.deleteStockIn(id);
-    if (res.success) {
-      await loadData();
-    } else {
-      alert(res.error || 'ไม่สามารถลบรายการได้');
+  const handleDeleteStockIn = async (id: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await StorageService.deleteStockIn(id);
+      if (res.success) {
+        await loadData();
+      } else {
+        alert(res.error || 'ไม่สามารถลบรายการได้');
+      }
+      return res;
+    } catch (e: any) {
+      console.error('Delete Stock In failed:', e);
+      return { success: false, error: e?.message || 'เกิดข้อผิดพลาดในการลบรายการ' };
     }
   };
 
   // Delete Stock Out (ลบรายการจ่ายออก พร้อมคืนสต็อก)
-  const handleDeleteStockOut = async (id: string) => {
-    const res = await StorageService.deleteStockOut(id, true);
-    if (res.success) {
-      await loadData();
-    } else {
-      alert(res.error || 'ไม่สามารถลบรายการได้');
+  const handleDeleteStockOut = async (id: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await StorageService.deleteStockOut(id, true);
+      if (res.success) {
+        await loadData();
+      } else {
+        alert(res.error || 'ไม่สามารถลบรายการได้');
+      }
+      return res;
+    } catch (e: any) {
+      console.error('Delete Stock Out failed:', e);
+      return { success: false, error: e?.message || 'เกิดข้อผิดพลาดในการลบรายการ' };
     }
   };
 

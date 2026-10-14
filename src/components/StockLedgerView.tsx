@@ -442,16 +442,19 @@ export const StockLedgerView: FC<StockLedgerViewProps> = ({
                 <div>
                   <h3 
                     className="font-bold text-slate-900 dark:text-white"
-                    style={{ fontSize: '25px', lineHeight: '31px', fontFamily: 'Sarabun' }}
+                    style={{ fontSize: '25px', lineHeight: '31px', fontFamily: 'Sarabun', width: '550px' }}
                   >
                     {currentMaterial.name}
                   </h3>
-                  <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    <span>หมวดหมู่: {currentMaterial.category}</span>
+                  <div 
+                    className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mt-0.5"
+                    style={{ width: '501px', height: '21px' }}
+                  >
+                    <span style={{ height: '20px', width: '150px' }}>หมวดหมู่: {currentMaterial.category}</span>
                     <span>•</span>
-                    <span>หน่วยนับ: {currentMaterial.unit}</span>
+                    <span style={{ width: '150px' }}>หน่วยนับ: {currentMaterial.unit}</span>
                     <span>•</span>
-                    <span>ราคาต่อหน่วย: ฿{(currentMaterial?.unitPrice || 0).toLocaleString()} บาท</span>
+                    <span style={{ width: '150px' }}>ราคาต่อหน่วย: ฿{(currentMaterial?.unitPrice || 0).toLocaleString()} บาท</span>
                   </div>
                 </div>
               </div>
@@ -461,11 +464,11 @@ export const StockLedgerView: FC<StockLedgerViewProps> = ({
                 className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap justify-end"
                 style={{ lineHeight: '19px' }}
               >
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2" style={{ width: '358.922px' }}>
                   <label 
                     htmlFor="ledger-material-select" 
                     className="text-xs font-bold text-slate-700 dark:text-slate-200 shrink-0"
-                    style={{ fontFamily: 'Sarabun' }}
+                    style={{ fontFamily: 'Sarabun', width: '53.4219px', height: '32px' }}
                   >
                     เลือกพัสดุ:
                   </label>
@@ -474,7 +477,7 @@ export const StockLedgerView: FC<StockLedgerViewProps> = ({
                     value={currentMaterial?.id || ''}
                     onChange={e => onSelectMaterial(e.target.value)}
                     className="px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-amber-500 focus:outline-none shadow-2xs max-w-xs cursor-pointer text-slate-800 dark:text-slate-100"
-                    style={{ fontFamily: 'Sarabun' }}
+                    style={{ fontFamily: 'Sarabun', width: '300px' }}
                   >
                     {materials.map(m => (
                       <option key={m.id} value={m.id}>
@@ -493,7 +496,7 @@ export const StockLedgerView: FC<StockLedgerViewProps> = ({
                   }}
                   title="ส่งออกสมุดคุมบัญชีพัสดุนี้เป็นไฟล์ Excel (.xlsx)"
                   className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer shrink-0"
-                  style={{ fontFamily: 'Sarabun' }}
+                  style={{ fontFamily: 'Sarabun', width: '117.484px' }}
                 >
                   <FileSpreadsheet className="w-4 h-4" />
                   <span>ส่งออก Excel</span>
@@ -1167,11 +1170,11 @@ export const StockLedgerView: FC<StockLedgerViewProps> = ({
                     } else {
                       await onDeleteStockOut?.(entryToDelete.id);
                     }
-                    setEntryToDelete(null);
                   } catch (e) {
                     console.error('Delete error:', e);
                   } finally {
                     setIsDeleting(false);
+                    setEntryToDelete(null);
                   }
                 }}
                 disabled={isDeleting}

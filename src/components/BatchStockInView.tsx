@@ -255,16 +255,16 @@ export const BatchStockInView: FC<BatchStockInViewProps> = ({
     try {
       setIsDeleting(true);
       const res = await onDeleteStockIn(deletingLog.id);
-      if (res.success) {
+      if (res && res.success) {
         setSuccessMessage(`ลบรายการรับเข้า "${deletingLog.docNo}" สำเร็จ และหักสต็อกพัสดุคืน ${deletingLog.quantity} ${deletingLog.unit} อัตโนมัติ`);
-        setDeletingLog(null);
       } else {
-        setErrorMessage(res.error || 'เกิดข้อผิดพลาดในการลบรายการ');
+        setErrorMessage(res?.error || 'เกิดข้อผิดพลาดในการลบรายการ');
       }
     } catch (err: any) {
       setErrorMessage(err?.message || 'เกิดข้อผิดพลาดในการลบรายการ');
     } finally {
       setIsDeleting(false);
+      setDeletingLog(null);
     }
   };
 

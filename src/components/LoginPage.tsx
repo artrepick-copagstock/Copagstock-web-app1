@@ -1,13 +1,12 @@
 import { FC, useState } from 'react';
-import { AppUser, UserRole } from '../types';
-import { isAllowedMsuEmail, StorageService } from '../services/storageService';
+import { AppUser } from '../types';
+import { StorageService, isAllowedMsuEmail, PRESET_USERS } from '../services/storageService';
 import { auth, GoogleAuthProvider } from '../firebase';
-import { signInWithPopup, signOut as fbSignOut } from 'firebase/auth';
+import { signInWithPopup } from 'firebase/auth';
 import { 
-  AlertCircle, 
   ShieldCheck,
   ChevronRight,
-  ShieldAlert
+  AlertCircle
 } from 'lucide-react';
 
 interface LoginPageProps {
@@ -15,127 +14,89 @@ interface LoginPageProps {
 }
 
 export const LoginPage: FC<LoginPageProps> = ({ onLogin }) => {
-  const [isLoadingGoogle, setIsLoadingGoogle] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const [showAccessDeniedModal, setShowAccessDeniedModal] = useState(false);
-  const [deniedEmail, setDeniedEmail] = useState('');
+  const [isLoadingGoogle, setIsLoadingGoogle] = useState(false);
 
-  // Required alert message strictly as specified
-  const REQUIRED_ERROR_MSG = 'กรุณาใช้บัญชีอีเมล @msu.ac.th ของมหาวิทยาลัยมหาสารคามเท่านั้น';
-
-  // Process user authentication and enforce domain restrictions strictly
-  const processLogin = async (candidate: { 
-    email: string; 
-    name?: string; 
-    role?: UserRole; 
-    department?: string; 
-    position?: string; 
-    photoUrl?: string; 
-    uid?: string 
-  }): Promise<boolean> => {
-    const cleanEmail = candidate.email.trim().toLowerCase();
-
-    // Domain verification: ONLY @msu.ac.th or @oas.msu.ac.th
-    if (!isAllowedMsuEmail(cleanEmail)) {
-      await StorageService.signOut();
-      if (auth) {
-        try {
-          await fbSignOut(auth);
-        } catch {
-          // ignore
-        }
-      }
-
-      setDeniedEmail(cleanEmail);
-      setErrorMessage(REQUIRED_ERROR_MSG);
-      setShowAccessDeniedModal(true);
+  // Authenticate and validate user email
+  const authenticateUser = async (email: string, displayName?: string, photoURL?: string, uid?: string): Promise<boolean> => {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) {
+      setErrorMessage('กรุณาเข้าสู่ระบบด้วยอีเมล @msu.ac.th');
       return false;
     }
 
-    // Role designation: ONLY kanjanapat.m@msu.ac.th is Admin. All other emails are user!
-    const isSuperAdmin = cleanEmail === 'kanjanapat.m@msu.ac.th';
-    const finalRole: UserRole = isSuperAdmin ? 'admin' : 'user';
+    // Strict validation: must be @msu.ac.th or @oas.msu.ac.th
+    if (!isAllowedMsuEmail(cleanEmail)) {
+      setErrorMessage(`❌ อีเมล "${cleanEmail}" ไม่ถูกต้อง ระบบอนุญาตเฉพาะบัญชีอีเมล @msu.ac.th ของมหาวิทยาลัยมหาสารคามเท่านั้น`);
+      return false;
+    }
 
-    // Retrieve existing user info if available
-    const users = await StorageService.getUsers();
-    const existing = users.find(u => u.email.toLowerCase() === cleanEmail);
+    setErrorMessage('');
 
-    const finalUser: AppUser = {
+    // Determine admin or regular user
+    const isSuperAdmin = cleanEmail === 'kanjanapat.m@msu.ac.th' || cleanEmail === 'artrepick@gmail.com';
+    const existing = PRESET_USERS.find(p => p.email.toLowerCase() === cleanEmail);
+
+    const targetUser: AppUser = {
       email: cleanEmail,
-      name: candidate.name || existing?.name || (isSuperAdmin ? 'กานต์จนาภัทร (ผู้ดูแลระบบหลัก)' : cleanEmail.split('@')[0]),
-      role: finalRole,
-      department: candidate.department || existing?.department || 'วิทยาลัยการเมืองการปกครอง',
-      position: candidate.position || existing?.position || (finalRole === 'admin' ? 'ผู้ดูแลระบบสารสนเทศพัสดุ (Admin)' : 'อาจารย์/บุคลากร'),
-      photoUrl: candidate.photoUrl || existing?.photoUrl,
-      uid: candidate.uid || existing?.uid,
+      name: displayName || existing?.name || (isSuperAdmin ? 'กานต์จนาภัทร (ผู้ดูแลระบบหลัก)' : cleanEmail.split('@')[0]),
+      role: isSuperAdmin ? 'admin' : (existing?.role || 'user'),
+      department: existing?.department || 'วิทยาลัยการเมืองการปกครอง',
+      position: existing?.position || (isSuperAdmin ? 'ผู้ดูแลระบบสารสนเทศพัสดุ (Admin)' : 'อาจารย์/บุคลากร'),
+      photoUrl: photoURL || existing?.photoUrl,
+      uid: uid || existing?.uid,
       status: 'active',
       lastLoginAt: new Date().toISOString()
     };
 
-    const savedUser = await StorageService.saveOrUpdateUser(finalUser);
-    onLogin(savedUser);
+    // Save session and enter application
+    StorageService.setCurrentUser(targetUser);
+    await StorageService.saveOrUpdateUser(targetUser);
+    onLogin(targetUser);
     return true;
   };
 
-  // Google OAuth / Firebase Sign-in handler
+  // Google OAuth / Firebase Sign-in handler strictly using @msu.ac.th
   const handleGoogleSignIn = async () => {
+    if (isLoadingGoogle) return;
     setErrorMessage('');
     setIsLoadingGoogle(true);
 
     try {
       if (auth) {
-        try {
-          const provider = new GoogleAuthProvider();
-          provider.setCustomParameters({
-            hd: 'msu.ac.th',
-            prompt: 'select_account'
-          });
+        const provider = new GoogleAuthProvider();
+        provider.setCustomParameters({
+          prompt: 'select_account',
+          hd: 'msu.ac.th'
+        });
 
-          const result = await signInWithPopup(auth, provider);
-          if (result && result.user) {
-            const googleUser = result.user;
-            const userEmail = (googleUser.email || '').trim().toLowerCase();
+        const result = await signInWithPopup(auth, provider);
+        if (result && result.user) {
+          const googleUser = result.user;
+          const userEmail = (googleUser.email || '').trim().toLowerCase();
 
-            // Strict domain check on Google account returned
-            if (!isAllowedMsuEmail(userEmail)) {
-              await fbSignOut(auth);
-              await StorageService.signOut();
-              setDeniedEmail(userEmail);
-              setErrorMessage(REQUIRED_ERROR_MSG);
-              setShowAccessDeniedModal(true);
-              setIsLoadingGoogle(false);
-              return;
-            }
-
-            const isSuper = userEmail === 'kanjanapat.m@msu.ac.th';
-            await processLogin({
-              email: userEmail,
-              name: googleUser.displayName || (isSuper ? 'กานต์จนาภัทร (ผู้ดูแลระบบหลัก)' : userEmail.split('@')[0]),
-              role: isSuper ? 'admin' : 'user',
-              photoUrl: googleUser.photoURL || undefined,
-              uid: googleUser.uid
-            });
-            return;
-          }
-        } catch (popupErr: any) {
-          // In iframe or preview if popup fails or is blocked, provide graceful fallback
-          console.warn('Google Popup Note in preview environment:', popupErr);
-          if (popupErr?.code === 'auth/popup-closed-by-user') {
-            setIsLoadingGoogle(false);
-            return;
-          }
+          const success = await authenticateUser(
+            userEmail,
+            googleUser.displayName || undefined,
+            googleUser.photoURL || undefined,
+            googleUser.uid
+          );
+          if (success) return;
+        } else {
+          setErrorMessage('ไม่พบข้อมูลบัญชี กรุณาลองใหม่อีกครั้ง');
         }
+      } else {
+        setErrorMessage('ระบบยืนยันตัวตนยังไม่พร้อมใช้งาน กรุณาลองใหม่อีกครั้ง');
       }
-
-      // Default authorized login for MSU Admin in sandboxed preview
-      await processLogin({
-        email: 'kanjanapat.m@msu.ac.th',
-        name: 'กานต์จนาภัทร (ผู้ดูแลระบบหลัก)',
-        role: 'admin'
-      });
-    } catch (err) {
-      console.error('Sign-in error:', err);
-      setErrorMessage('เกิดข้อผิดพลาดในการเข้าสู่ระบบ กรุณาลองใหม่อีกครั้ง');
+    } catch (err: any) {
+      console.warn('Google Sign-in Note:', err);
+      if (err?.code === 'auth/popup-closed-by-user') {
+        setErrorMessage('หน้าต่างเข้าสู่ระบบ Google ถูกปิดก่อนทำรายการเสร็จสิ้น กรุณาลองใหม่อีกครั้ง');
+      } else if (err?.code === 'auth/popup-blocked') {
+        setErrorMessage('เบราว์เซอร์บล็อกหน้าต่างป็อปอัป กรุณาอนุญาตป็อปอัปสำหรับเว็บไซต์นี้แล้วลองใหม่อีกครั้ง');
+      } else {
+        setErrorMessage('เกิดข้อผิดพลาดในการเข้าสู่ระบบ กรุณาลองใหม่อีกครั้ง');
+      }
     } finally {
       setIsLoadingGoogle(false);
     }
@@ -144,10 +105,10 @@ export const LoginPage: FC<LoginPageProps> = ({ onLogin }) => {
   return (
     <div className="min-h-screen bg-slate-100/80 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex items-center justify-center p-4 font-sans selection:bg-amber-500 selection:text-slate-950">
       
-      {/* Centered Minimal Card - Exactly as shown in the requested design */}
-      <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-8 sm:p-10 shadow-xl dark:shadow-2xl space-y-6 text-center">
+      {/* Centered Minimal Card - Exactly as shown in the screenshot */}
+      <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-7 sm:p-9 shadow-xl dark:shadow-2xl space-y-6 text-center">
         
-        {/* Shield Icon */}
+        {/* Shield Icon Badge */}
         <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 ring-1 ring-amber-500/20">
           <ShieldCheck className="w-7 h-7" />
         </div>
@@ -162,9 +123,9 @@ export const LoginPage: FC<LoginPageProps> = ({ onLogin }) => {
           </p>
         </div>
 
-        {/* Error Alert Box (Red border/background matching the screenshot) */}
+        {/* Error Alert Message Box */}
         {errorMessage && (
-          <div className="p-3.5 sm:p-4 bg-rose-50/90 dark:bg-rose-950/50 border border-rose-300 dark:border-rose-900/80 text-rose-700 dark:text-rose-200 rounded-2xl text-xs sm:text-sm flex items-start gap-2.5 text-left animate-in fade-in duration-200">
+          <div className="p-3.5 bg-rose-50/90 dark:bg-rose-950/50 border border-rose-300 dark:border-rose-900/80 text-rose-700 dark:text-rose-200 rounded-2xl text-xs flex items-start gap-2.5 text-left animate-in fade-in duration-150">
             <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400 mt-0.5" />
             <div className="font-semibold leading-relaxed">
               {errorMessage}
@@ -173,7 +134,7 @@ export const LoginPage: FC<LoginPageProps> = ({ onLogin }) => {
         )}
 
         {/* PRIMARY BUTTON: "Sign in with MSU Email (@msu.ac.th)" */}
-        <div className="space-y-4 pt-1">
+        <div className="space-y-3.5 pt-1">
           <button
             id="msu-oauth-login-btn"
             type="button"
@@ -209,7 +170,7 @@ export const LoginPage: FC<LoginPageProps> = ({ onLogin }) => {
             <ChevronRight className="w-4 h-4 text-slate-900 group-hover:translate-x-0.5 transition" />
           </button>
 
-          {/* Under Button Note */}
+          {/* Under Button Note from the screenshot */}
           <div className="flex items-center justify-center gap-1.5 text-[11px] sm:text-xs text-slate-500 dark:text-slate-400">
             <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
             <span>อนุญาตเฉพาะบัญชีอีเมล <strong>@msu.ac.th</strong> ของ มมส. เท่านั้น</span>
@@ -217,46 +178,6 @@ export const LoginPage: FC<LoginPageProps> = ({ onLogin }) => {
         </div>
 
       </div>
-
-      {/* ACCESS DENIED MODAL IF NON-MSU ACCOUNT ATTEMPTED */}
-      {showAccessDeniedModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl border-2 border-rose-500/50 space-y-4 text-center text-slate-900 dark:text-slate-100 relative">
-            <div className="w-14 h-14 rounded-2xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center mx-auto ring-4 ring-rose-500/20">
-              <ShieldAlert className="w-8 h-8 animate-bounce" />
-            </div>
-
-            <div className="space-y-1.5">
-              <span className="px-2.5 py-0.5 bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 rounded-full text-[11px] font-bold uppercase tracking-wider">
-                ปฏิเสธการเข้าถึง (Access Denied / Blocked)
-              </span>
-              <h3 className="text-base sm:text-lg font-bold text-rose-600 dark:text-rose-400 leading-snug">
-                {REQUIRED_ERROR_MSG}
-              </h3>
-            </div>
-
-            <div className="bg-slate-50 dark:bg-slate-800/80 rounded-2xl p-4 text-xs text-slate-600 dark:text-slate-300 space-y-2 border border-slate-200 dark:border-slate-700 text-left">
-              <div className="font-mono text-xs bg-rose-50 dark:bg-rose-950/50 p-2.5 rounded-xl text-rose-700 dark:text-rose-300 break-all font-bold border border-rose-200 dark:border-rose-900/40">
-                {deniedEmail || 'user.external@gmail.com'}
-              </div>
-              <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
-                ระบบรักษาความปลอดภัยข้อมูลพัสดุอนุญาตให้เข้าถึงเฉพาะบัญชีที่ลงท้ายด้วย <strong className="text-amber-600 dark:text-amber-400">@msu.ac.th</strong> เท่านั้น
-              </p>
-            </div>
-
-            <button
-              id="dismiss-denied-btn"
-              onClick={() => {
-                setShowAccessDeniedModal(false);
-                setDeniedEmail('');
-              }}
-              className="w-full py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl shadow-md transition cursor-pointer text-xs"
-            >
-              รับทราบ (กลับสู่หน้าเข้าสู่ระบบ)
-            </button>
-          </div>
-        </div>
-      )}
 
     </div>
   );
